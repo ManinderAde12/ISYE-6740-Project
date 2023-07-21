@@ -13,7 +13,7 @@ import re
 from sklearn.decomposition import PCA
 
 # %% extract each image into a new file
-def read_path_assignments_to_tuple_list(filepath, image_size = 150):
+def read_path_assignments_to_tuple_list(filepath = './chest_xray/xray_balanced_data_df.csv', image_size = 150):
     """
     Description 
     -------
@@ -39,7 +39,7 @@ def read_path_assignments_to_tuple_list(filepath, image_size = 150):
         data set.
     """
     # read data
-    df = pd.read_csv('./chest_xray/xray_balanced_data_df.csv')
+    df = pd.read_csv(filepath)
     
     # iterate through each row
     train, test, val = [], [], []
@@ -123,6 +123,9 @@ def pca_and_convert_to_pandas(X, y, sets, pca_dim = 20):
     Given a set of vectorized images `X`, their class labels `y`, and which 
     `sets` they belong to, perform PCA to reduce the dimensionality down to
     `pca_dim`. Then store that as a df.
+    
+    Note that we have to generate the PCA eigenvalues and eigenvectors on the 
+    training data set, then utilize those to transform the test and val sets
 
     Inputs
     -------
@@ -133,20 +136,58 @@ def pca_and_convert_to_pandas(X, y, sets, pca_dim = 20):
 
     Returns
     ------
-    `df` = The pandas data frame representation of reduced images.
+    `df_pca` = The pandas data frame representation of reduced images.
 
     """
-    X_pca = PCA(n_components = pca_dim).fit_transform(X)  
-    colnames = ['pca' + str(i) for i in range(pca_dim)]
-    df = pd.DataFrame(X_pca, columns = colnames)
+    # === slice out train test split ===
+    
+    ## construct pandas dataframe for easier slicing
+    df = pd.DataFrame(X)
     df['y'] = y
     df['set'] = sets 
 
-    return df
+    ## slice out the sets
+    X_train = df[df['set'] == 'train'].drop(['y', 'set'], axis = 1).to_numpy()
+    y_train = df[df['set'] == 'train']['y'].reset_index(drop = True)
+    X_test = df[df['set'] == 'test'].drop(['y', 'set'], axis = 1).to_numpy()
+    y_test = df[df['set'] == 'test']['y'].reset_index(drop = True)
+    X_val = df[df['set'] == 'validate'].drop(['y', 'set'], axis = 1).to_numpy()
+    y_val = df[df['set'] == 'validate']['y'].reset_index(drop = True)
 
-# %% run through workflow and save to csv
-train, test, val = read_path_assignments_to_tuple_list(fpath)
+    # === perform PCA  on training component ===
+    # === use that to transform test and val ===
+    pca = PCA(n_components = pca_dim)
+    X_train_pca = pca.fit_transform(X_train)  
+    X_test_pca = pca.transform(X_test)
+    X_val_pca = pca.transform(X_val)
+    
+    # === store to pandas dataframe ===
+    colnames = ['pca' + str(i) for i in range(pca_dim)]
+
+    ## train
+    df_pca_train = pd.DataFrame(X_train_pca, columns = colnames)
+    df_pca_train['y'] = y_train
+    df_pca_train['set'] = 'train' 
+
+    ## test
+    df_pca_test = pd.DataFrame(X_test_pca, columns = colnames)
+    df_pca_test['y'] = y_test
+    df_pca_test['set'] = 'test' 
+
+    ## val
+    df_pca_val = pd.DataFrame(X_val_pca, columns = colnames)
+    df_pca_val['y'] = y_val
+    df_pca_val['set'] = 'validate' 
+
+    ## merge all together
+    df_pca = pd.concat([df_pca_train, df_pca_test, df_pca_val])\
+        .reset_index(drop = True)
+
+    return df_pca
+
+# %%
+# run through workflow and save to csv
+train, test, val = read_path_assignments_to_tuple_list()
 sets, y, X = convert_tuple_list_to_sklearn_objects(train, test, val)
 final_df = pca_and_convert_to_pandas(X, y, sets)
 final_df.to_csv('Pnuemonia Images PCA Reduced.csv')
-    
