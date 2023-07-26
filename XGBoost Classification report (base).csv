@@ -1,0 +1,5 @@
+class,precision,recall,f1_score,support
+  Normal (0),0.87,0.88,0.88,506.0
+   Virus (1),0.71,0.54,0.61,506.0
+Bacteria (2),0.64,0.79,0.71,506.0
+    accuracy,,,0.74,1518.0
